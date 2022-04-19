@@ -1,14 +1,24 @@
 // Require the necessary discord.js classes
-const { Client, Intents } = require('discord.js');
+const { Client, Intents, WebhookClient } = require('discord.js');
 const { token } = require('./config.json');
 const fs = require('fs');
 const LinkFileName = './links.json';
 // Create a new client instance
-const client = new Client({ intents: [Intents.FLAGS.GUILDS] });
+const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] });
 // When the client is ready, run this code (only once)
 client.once('ready', () => {
 	console.log('Ready!');
 });
+if (fs.existsSync(LinkFileName)) {
+	console.log('file found');
+}
+else {
+	console.log('file not found');
+	fs.writeFile(LinkFileName, '', function(err) {
+		if (err) throw err;
+		console.log('File is created successfully.');
+	});
+}
 function jsonReader(filePath, cb) {
 	fs.readFile(filePath, (err, fileData) => {
 		if (err) {
@@ -32,6 +42,54 @@ function jsonReader(filePath, cb) {
 		}
 	});
 }
+function getWebhook(channelID) {
+	const rawdata = fs.readFileSync(LinkFileName);
+	if (rawdata.length == 0) return null;
+	const data = JSON.parse(rawdata);
+	if (data == null || data == undefined) return null;
+	const webhookList = data.webhooks;
+	if (webhookList == null || webhookList == undefined) return null;
+	if (webhookList.length == 0) return null;
+	for (const webhook of webhookList) {
+		if (webhook.channelID == channelID) {
+			return {
+				id:webhook.id,
+				token:webhook.token,
+			};
+		}
+	}
+	return null;
+}
+function createWebhook(channel) {
+	if (channel == null) {
+		console.error('channel is null!');
+		return ;
+	}
+	channel.createWebhook('Linker', {
+		avatar: 'https://www.colle.eu/media/13981/cat-926m-pdp-verhuur.jpg?width=550',
+		reason: 'Needed a cool new Webhook',
+	}).then(createdWebhook => {
+		console.log(`Created webhook ${createdWebhook}`);
+		jsonReader(LinkFileName, (err, links) => {
+			if (err) {
+				console.log('Error reading file:', err);
+				return;
+			}
+			if (links == null) return;
+			if (links.webhooks == null) {
+				links.webhooks = [];
+			}
+			links.webhooks.push({
+				channelID: channel.id,
+				id:createdWebhook.id,
+				token:createdWebhook.token,
+			});
+			fs.writeFile(LinkFileName, JSON.stringify(links, null, 4), err => {
+				if (err) console.log('Error writing file:', err);
+			});
+		});
+	}).catch(console.error);
+}
 function searchFreeLink() {
 	const rawdata = fs.readFileSync(LinkFileName);
 	if (rawdata.length == 0) return null;
@@ -46,6 +104,35 @@ function searchFreeLink() {
 		return null;
 	}
 }
+function getlink(guildID) {
+	const rawdata = fs.readFileSync(LinkFileName);
+	if (rawdata.length == 0) return null;
+	const data = JSON.parse(rawdata);
+	if (data == null || data == undefined) return null;
+	if (data.actives == undefined || data.actives == null) {
+		return null;
+	}
+	for (const object of data.actives) {
+		if (object.guild1.id == guildID || object.guild2.id == guildID) {
+			return object;
+		}
+	}
+	return false;
+}
+function checkLinks(guildID) {
+	const rawdata = fs.readFileSync(LinkFileName);
+	if (rawdata.length == 0) return null;
+	const data = JSON.parse(rawdata);
+	if (data == null || data == undefined) return null;
+	if (data.actives == undefined || data.actives == null) {
+		data.actives = [];
+	}
+	for (const object of data.actives) {
+		if (object.guild1.id == guildID || object.guild2.id == guildID) return true;
+	}
+	return false;
+}
+
 function setServerInWaitingLine(guildId, channelID) {
 	console.log('set ' + guildId + ' in waiting line');
 	jsonReader(LinkFileName, (err, links) => {
@@ -80,7 +167,7 @@ async function setConnection(guildId1, channelID1, guildId2, channelID2, duratio
 					id : guildId1,
 					channelID: channelID1,
 				},
-				'guildId2':{
+				'guild2':{
 					id : guildId2,
 					channelID: channelID2,
 				},
@@ -105,7 +192,9 @@ async function setConnection(guildId1, channelID1, guildId2, channelID2, duratio
 	}
 	channel1.send('Server found, establishing connection...');
 	channel1.send('Connexion done! (research duration: ' + duration + 'min)');
-
+	if (getWebhook(channel1.id) == null) {
+		createWebhook(channel1);
+	}
 	const guild2 = await client.guilds.fetch(guildId2);
 	if (guild2 == null) {
 		console.error('Guild2 is not found! (guild id: ' + guildId2 + ')');
@@ -118,6 +207,9 @@ async function setConnection(guildId1, channelID1, guildId2, channelID2, duratio
 	}
 	channel2.send('Connexion done!');
 	console.log(`Connection done between ${guild1.name} (${channel1.name}) and ${guild2.name} (${channel2.name}) `);
+	if (getWebhook(channel2.id) == null) {
+		createWebhook(channel2);
+	}
 }
 
 
@@ -131,8 +223,11 @@ client.on('interactionCreate', async interaction => {
 	}
 	else if (commandName === 'link') {
 		await interaction.reply('Searching for a server...');
-		// eslint-disable-next-line prefer-const
 		const freelink = searchFreeLink();
+		if (checkLinks(interaction.guildId)) {
+			interaction.channel.send('you are already linked with another server!');
+			return;
+		}
 		if (freelink == null) {
 			setServerInWaitingLine(interaction.guildId, interaction.channelId);
 		}
@@ -152,6 +247,59 @@ client.on('interactionCreate', async interaction => {
 				setConnection(serverID, freelink.channelID, interaction.guildId, interaction.channelId, diff);
 			}
 		}
+	}
+});
+
+client.on('messageCreate', async (message) => {
+	if (message.author.bot || message.webhookId) return;
+	if (!checkLinks(message.guildId)) return;
+	const object = getlink(message.guildId);
+	if (object.guild1.id == message.guildId) {
+		const guild2 = await client.guilds.fetch(object.guild2.id);
+		if (guild2 == null) {
+			console.error('guild is null!');
+			return;
+		}
+		const targetChannel = await guild2.channels.fetch(object.guild2.channelID);
+		if (targetChannel == null) {
+			console.error('channel is null!');
+			return;
+		}
+		const webhookCredential = getWebhook(targetChannel.id);
+		if (webhookCredential == null) {
+			console.error('webhook is null!');
+			return null;
+		}
+		const webhookClient = new WebhookClient({ id: webhookCredential.id, token: webhookCredential.token });
+		webhookClient.send({
+			content:message.content,
+			avatarURL: message.author.displayAvatarURL(),
+			username: message.author.username,
+		});
+
+	}
+	else {
+		const guild1 = await client.guilds.fetch(object.guild1.id);
+		if (guild1 == null) {
+			console.error('guild is null!');
+			return;
+		}
+		const targetChannel = await guild1.channels.fetch(object.guild1.channelID);
+		if (targetChannel == null) {
+			console.error('channel is null!');
+			return;
+		}
+		const webhookCredential = getWebhook(targetChannel.id);
+		if (webhookCredential == null) {
+			console.error('webhook is null!');
+			return null;
+		}
+		const webhookClient = new WebhookClient({ id: webhookCredential.id, token: webhookCredential.token });
+		webhookClient.send({
+			content:message.content,
+			avatarURL: message.author.displayAvatarURL(),
+			username: message.author.username,
+		});
 	}
 });
 // Login to Discord with your client's token

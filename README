@@ -3,6 +3,5 @@ this bot is still under developpement
 
 TODO:
     message receiving a sending in the other server by webhook
-    some verification to prevent any double connection in the json file
-    create the json file if not found
     24 after stop the connection
+    /unlink command

@@ -8,6 +8,7 @@ const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_
 // When the client is ready, run this code (only once)
 client.once('ready', () => {
 	console.log('Ready!');
+	client.user.setActivity('all servers linked together', { type: 'WATCHING' });
 });
 if (fs.existsSync(LinkFileName)) {
 	console.log('file found');
@@ -125,12 +126,13 @@ function checkLinks(guildID) {
 	const data = JSON.parse(rawdata);
 	if (data == null || data == undefined) return null;
 	if (data.actives == undefined || data.actives == null) {
-		data.actives = [];
+		return null;
 	}
 	for (const object of data.actives) {
+		if (object == null) continue;
 		if (object.guild1.id == guildID || object.guild2.id == guildID) return true;
 	}
-	return false;
+	return null;
 }
 
 function setServerInWaitingLine(guildId, channelID) {
@@ -146,6 +148,56 @@ function setServerInWaitingLine(guildId, channelID) {
 		fs.writeFile(LinkFileName, JSON.stringify(links, null, 4), err => {
 			if (err) console.log('Error writing file:', err);
 		});
+	});
+}
+function removeConnection(guildID) {
+	console.log('deconnecting ' + guildID);
+	fs.readFile(LinkFileName, 'utf8', async function readFileCallback(err, data) {
+		if (err) {
+			console.log(err);
+		}
+		else {
+			const obj = JSON.parse(data);
+			if (obj.actives == undefined || obj.actives == null) {
+				obj.actives = [];
+			}
+			for (let i = 0; i < obj.actives.length; i++) {
+				const object = obj.actives[i];
+				if (object.guild1.id == guildID || object.guild2.id == guildID) {
+					obj.actives.splice(i, 1);
+				}
+				const guild1 = await client.guilds.fetch(object.guild1.id);
+				if (guild1 == null) {
+					console.error('Guild1 is not found! (guild id: ' + object.guild1.id + ')');
+					return;
+				}
+				const channel1 = await guild1.channels.fetch(object.guild1.channelID);
+				if (channel1 == null) {
+					console.error('Guild1 channel is not found! (channel id: ' + object.guild1.channelID + ')');
+					return;
+				}
+				channel1.send('Link closed');
+
+				const guild2 = await client.guilds.fetch(object.guild2.id);
+				if (guild2 == null) {
+					console.error('Guild2 is not found! (guild id: ' + object.guild2.id + ')');
+					return;
+				}
+				const channel2 = await guild2.channels.fetch(object.guild2.channelID);
+				if (channel2 == null) {
+					console.error('Guild2 channel is not found! (channel id: ' + object.guild2.ChannelID + ')');
+					return;
+				}
+				channel2.send('Link closed');
+
+			}
+			const json = JSON.stringify(obj, null, '\t');
+			fs.writeFile(LinkFileName, json, function writeFileCallback(err) {
+				if (err) {
+					console.log(err);
+				}
+			});
+		}
 	});
 }
 async function setConnection(guildId1, channelID1, guildId2, channelID2, duration) {
@@ -210,6 +262,14 @@ async function setConnection(guildId1, channelID1, guildId2, channelID2, duratio
 	if (getWebhook(channel2.id) == null) {
 		createWebhook(channel2);
 	}
+	const inviteGuild1 = await guild1.invites.create(channel1.id, { temporary:true, maxAge:86400 });
+	channel2.send('Welcome to ' + guild1.name + '!\nHere is the invite if you want to join the server: ' + inviteGuild1.url);
+	const inviteGuild2 = await guild2.invites.create(channel2.id, { temporary:true, maxAge:86400 });
+	channel1.send('Welcome to ' + guild2.name + '!\nHere is the invite if you want to join the server: ' + inviteGuild2.url);
+	// 24h timeout, maybe better solution but idk for the moment
+	setTimeout(() => {
+		removeConnection(guild1.id);
+	}, 1000 * 60 * 60 * 24);
 }
 
 
@@ -247,6 +307,15 @@ client.on('interactionCreate', async interaction => {
 				setConnection(serverID, freelink.channelID, interaction.guildId, interaction.channelId, diff);
 			}
 		}
+	}
+	else if (commandName == 'unlink') {
+		if (!checkLinks(interaction.guildId)) {
+			interaction.reply('you are not linked!');
+			return;
+		}
+		interaction.reply('Disconecting...');
+		removeConnection(interaction.guildId);
+
 	}
 });
 

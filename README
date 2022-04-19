@@ -2,6 +2,6 @@ This discord bot make people from two differents servers meets each other by a l
 this bot is still under developpement
 
 TODO:
-    message receiving a sending in the other server by webhook
-    24 after stop the connection
-    /unlink command
+    message modification deletion and reactions //I have no idea of how to do it
+    choose a better way to save datas (like with a db)
+    embed link confirmation

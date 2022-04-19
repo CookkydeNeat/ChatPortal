@@ -6,6 +6,7 @@ const { clientId, guildId, token } = require('./config.json');
 const commands = [
 	new SlashCommandBuilder().setName('ping').setDescription('Replies with pong!'),
 	new SlashCommandBuilder().setName('link').setDescription('Link this channel with another server for 24hours'),
+	new SlashCommandBuilder().setName('unlink').setDescription('unlink the server'),
 ]
 	.map(command => command.toJSON());
 

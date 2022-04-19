@@ -1,0 +1,21 @@
+{
+  "name": "chatportal",
+  "version": "1.0.0",
+  "description": "a discord bot that link two servers channel together for 24h",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Cookky",
+  "license": "ISC",
+  "dependencies": {
+    "@discordjs/builders": "^0.13.0",
+    "@discordjs/rest": "^0.4.1",
+    "discord-api-types": "^0.31.2",
+    "discord.js": "^13.6.0",
+    "node": "^17.7.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.13.0"
+  }
+}

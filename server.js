@@ -1,6 +1,6 @@
 // Require the necessary discord.js classes
 const { Client, Intents, WebhookClient } = require('discord.js');
-const { token } = require('./config.json');
+require('dotenv').config();
 const fs = require('fs');
 const LinkFileName = './links.json';
 // Create a new client instance
@@ -372,4 +372,4 @@ client.on('messageCreate', async (message) => {
 	}
 });
 // Login to Discord with your client's token
-client.login(token);
+client.login(process.env.DISCORD_TOKEN);
